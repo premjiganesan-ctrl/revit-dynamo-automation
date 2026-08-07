@@ -1,0 +1,34 @@
+import clr
+clr.AddReference('RevitServices')
+from RevitServices.Persistence import DocumentManager
+from RevitServices.Transactions import TransactionManager
+
+clr.AddReference('RevitAPI')
+from Autodesk.Revit.DB import Level, FilteredElementCollector
+
+doc = DocumentManager.Instance.CurrentDBDocument
+
+level_names = ["PRM-Ground", "PRM-Level 1", "PRM-Level 2"]
+level_heights = [0.0, 3.3, 6.6]
+ft_per_m = 3.28084
+
+existing = FilteredElementCollector(doc).OfClass(Level)
+existing_names = [lvl.Name for lvl in existing]
+
+TransactionManager.Instance.EnsureInTransaction(doc)
+
+new_levels = []
+skipped = []
+for name, height in zip(level_names, level_heights):
+    if name in existing_names:
+        skipped.append(name)
+        continue
+    lvl = Level.Create(doc, height * ft_per_m)
+    lvl.Name = name
+    new_levels.append(lvl)
+
+TransactionManager.Instance.TransactionTaskDone()
+
+OUT = "Created: {} | Skipped (already exist): {}".format(
+    [l.Name for l in new_levels], skipped
+)
