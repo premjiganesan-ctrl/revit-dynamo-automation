@@ -1,0 +1,30 @@
+import clr
+clr.AddReference('RevitServices')
+from RevitServices.Persistence import DocumentManager
+from RevitServices.Transactions import TransactionManager
+
+clr.AddReference('RevitAPI')
+from Autodesk.Revit.DB import (
+    Level, UV, FilteredElementCollector
+)
+
+doc = DocumentManager.Instance.CurrentDBDocument
+ft_per_m = 3.28084
+
+levels = FilteredElementCollector(doc).OfClass(Level).ToElements()
+ground_level = None
+for lvl in levels:
+    if lvl.Name == "PRM-Ground":
+        ground_level = lvl
+        break
+
+center_point = UV(7.5 * ft_per_m, 6.0 * ft_per_m)
+
+TransactionManager.Instance.EnsureInTransaction(doc)
+
+new_room = doc.Create.NewRoom(ground_level, center_point)
+new_room.Name = "PRM-Ground-Room-01"
+
+TransactionManager.Instance.TransactionTaskDone()
+
+OUT = "Created room '{}' on {}".format(new_room.Name, ground_level.Name)
