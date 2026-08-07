@@ -1,0 +1,53 @@
+import clr
+clr.AddReference('RevitServices')
+from RevitServices.Persistence import DocumentManager
+from RevitServices.Transactions import TransactionManager
+clr.AddReference('RevitAPI')
+from Autodesk.Revit.DB import Wall, WallType, Level, Line, XYZ, FilteredElementCollector
+
+doc = DocumentManager.Instance.CurrentDBDocument
+ft_per_m = 3.28084
+
+levels = FilteredElementCollector(doc).OfClass(Level).ToElements()
+level_1 = None
+for lvl in levels:
+    if lvl.Name == "PRM-Level 1":
+        level_1 = lvl
+
+wall_types = FilteredElementCollector(doc).OfClass(WallType).ToElements()
+interior_wall_type = None
+for wt in wall_types:
+    if wt.Name == "Interior - 125mm Partition":
+        interior_wall_type = wt
+
+old_lines = [((8.0, 0.0), (8.0, 12.0)), ((0.0, 6.0), (8.0, 6.0)), ((8.0, 6.0), (15.0, 6.0))]
+
+all_walls = FilteredElementCollector(doc).OfClass(Wall).ToElements()
+walls_to_delete = []
+for w in all_walls:
+    if w.LevelId == level_1.Id and w.WallType.Name == "Interior - 125mm Partition":
+        loc = w.Location.Curve
+        s = loc.GetEndPoint(0)
+        e = loc.GetEndPoint(1)
+        s_m = (round(s.X / ft_per_m, 1), round(s.Y / ft_per_m, 1))
+        e_m = (round(e.X / ft_per_m, 1), round(e.Y / ft_per_m, 1))
+        for pair in old_lines:
+            if s_m == pair[0] and e_m == pair[1]:
+                walls_to_delete.append(w.Id)
+
+TransactionManager.Instance.EnsureInTransaction(doc)
+
+for wid in walls_to_delete:
+    doc.Delete(wid)
+
+new_partitions = [(XYZ(8.0 * ft_per_m, 0.0, 0.0), XYZ(8.0 * ft_per_m, 12.0 * ft_per_m, 0.0)), (XYZ(0.0, 7.0 * ft_per_m, 0.0), XYZ(8.0 * ft_per_m, 7.0 * ft_per_m, 0.0)), (XYZ(8.0 * ft_per_m, 9.0 * ft_per_m, 0.0), XYZ(15.0 * ft_per_m, 9.0 * ft_per_m, 0.0))]
+
+new_walls = []
+for pair in new_partitions:
+    line = Line.CreateBound(pair[0], pair[1])
+    wall = Wall.Create(doc, line, interior_wall_type.Id, level_1.Id, 3.3 * ft_per_m, 0.0, False, False)
+    new_walls.append(wall)
+
+TransactionManager.Instance.TransactionTaskDone()
+
+OUT = "Deleted {} old partitions, created {} new uneven partitions".format(len(walls_to_delete), len(new_walls))
