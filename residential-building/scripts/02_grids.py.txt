@@ -1,0 +1,52 @@
+import clr
+clr.AddReference('RevitServices')
+from RevitServices.Persistence import DocumentManager
+from RevitServices.Transactions import TransactionManager
+
+clr.AddReference('RevitAPI')
+from Autodesk.Revit.DB import Grid, Line, XYZ, FilteredElementCollector
+
+doc = DocumentManager.Instance.CurrentDBDocument
+ft_per_m = 3.28084
+
+vertical_positions = [0.0, 5.0, 10.0, 15.0]
+vertical_names = ["A", "B", "C", "D"]
+depth = 12.0
+
+horizontal_positions = [0.0, 4.0, 8.0, 12.0]
+horizontal_names = ["1", "2", "3", "4"]
+width = 15.0
+
+existing = FilteredElementCollector(doc).OfClass(Grid)
+existing_names = [g.Name for g in existing]
+
+TransactionManager.Instance.EnsureInTransaction(doc)
+
+new_grids = []
+skipped = []
+
+for x, name in zip(vertical_positions, vertical_names):
+    if name in existing_names:
+        skipped.append(name)
+        continue
+    x_ft = x * ft_per_m
+    line = Line.CreateBound(XYZ(x_ft, 0.0, 0.0), XYZ(x_ft, depth * ft_per_m, 0.0))
+    grid = Grid.Create(doc, line)
+    grid.Name = name
+    new_grids.append(grid)
+
+for y, name in zip(horizontal_positions, horizontal_names):
+    if name in existing_names:
+        skipped.append(name)
+        continue
+    y_ft = y * ft_per_m
+    line = Line.CreateBound(XYZ(0.0, y_ft, 0.0), XYZ(width * ft_per_m, y_ft, 0.0))
+    grid = Grid.Create(doc, line)
+    grid.Name = name
+    new_grids.append(grid)
+
+TransactionManager.Instance.TransactionTaskDone()
+
+OUT = "Created: {} | Skipped (already exist): {}".format(
+    [g.Name for g in new_grids], skipped
+)
