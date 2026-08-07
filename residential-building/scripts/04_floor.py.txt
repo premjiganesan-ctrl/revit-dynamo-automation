@@ -1,0 +1,53 @@
+import clr
+clr.AddReference('RevitServices')
+from RevitServices.Persistence import DocumentManager
+from RevitServices.Transactions import TransactionManager
+
+clr.AddReference('RevitAPI')
+from Autodesk.Revit.DB import (
+    Floor, FloorType, Level, CurveLoop, Line, XYZ,
+    FilteredElementCollector
+)
+
+doc = DocumentManager.Instance.CurrentDBDocument
+ft_per_m = 3.28084
+
+levels = FilteredElementCollector(doc).OfClass(Level).ToElements()
+ground_level = None
+for lvl in levels:
+    if lvl.Name == "PRM-Ground":
+        ground_level = lvl
+        break
+
+floor_types = FilteredElementCollector(doc).OfClass(FloorType).ToElements()
+basic_floor_type = floor_types[0]
+
+width = 15.0
+depth = 12.0
+
+corners = [
+    XYZ(0.0, 0.0, 0.0),
+    XYZ(width * ft_per_m, 0.0, 0.0),
+    XYZ(width * ft_per_m, depth * ft_per_m, 0.0),
+    XYZ(0.0, depth * ft_per_m, 0.0)
+]
+
+curve_loop = CurveLoop()
+for i in range(4):
+    start = corners[i]
+    end = corners[(i + 1) % 4]
+    curve_loop.Append(Line.CreateBound(start, end))
+
+loops = clr.StrongBox[clr.System.Collections.Generic.List[CurveLoop]] if False else None
+
+from System.Collections.Generic import List
+loop_list = List[CurveLoop]()
+loop_list.Add(curve_loop)
+
+TransactionManager.Instance.EnsureInTransaction(doc)
+
+floor = Floor.Create(doc, loop_list, basic_floor_type.Id, ground_level.Id)
+
+TransactionManager.Instance.TransactionTaskDone()
+
+OUT = "Created floor slab on {} using type {}".format(ground_level.Name, basic_floor_type.Name)
